@@ -1,35 +1,70 @@
-import React, { useContext, useEffect } from 'react'
-import './Verify.css'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { StoreContext } from '../../context/StoreContext';
-import axios from 'axios';
+import React, { useEffect } from "react";
+import axios from "axios";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 
 const Verify = () => {
-    const [searchParams,setSearchParams]=useSearchParams();
-    const success=searchParams.get("success");
-    const orderId=searchParams.get("orderId");
-    const {url} =useContext(StoreContext);
-    const navigate= useNavigate();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    const verifyPayment=async()=>{
-        const response= await axios.post(url+"/api/order/verify",{success,orderId});
-        if(response.data.success){
-            navigate("/myorders");
-            toast.success("Order Placed Successfully");
-        }else{
-            toast.error("Something went wrong");
-            navigate("/");
-        }
+  // Helper to extract query parameters from the URL
+  const getQueryParams = () => {
+    const params = new URLSearchParams(location.search);
+    return {
+      orderId: params.get("orderId"),
+      razorpay_payment_id: params.get("paymentId"),
+      razorpay_order_id: params.get("orderRazorId"),
+      razorpay_signature: params.get("signature"),
+    };
+  };
+
+  // Function to verify payment
+  const verifyPayment = async () => {
+    const { orderId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = getQueryParams();
+
+    console.log("🔍 Verifying Payment with Data: ", {
+      orderId,
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+    });
+
+    // Validate all required parameters
+    if (!orderId || !razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+      toast.error("Missing payment details. Verification failed.");
+      navigate("/cart");
+      return;
     }
-    useEffect(()=>{
-        verifyPayment();
-    },[])
-  return (
-    <div className='verify'>
-        <div className="spinner"></div>
-    </div>
-  )
-}
 
-export default Verify
+    try {
+      // Send verification request to the backend
+      const { data } = await axios.post("https://go-food-backend-vercel-kt2k1dpf9.vercel.app/api/order/verify", {
+        orderId,
+        razorpay_payment_id,
+        razorpay_order_id,
+        razorpay_signature,
+      });
+
+      // Handle verification response
+      if (data.success) {
+        toast.success("✅ Payment verified successfully!");
+        navigate("/");
+      } else {
+        toast.error("❌ Payment verification failed.");
+        navigate("/cart");
+      }
+    } catch (error) {
+      console.error("❌ Verification Error:", error);
+      toast.error("Error during payment verification. Try again.");
+      navigate("/cart");
+    }
+  };
+
+  useEffect(() => {
+    verifyPayment();
+  }, []);
+
+  return <div>🔍 Verifying payment, please wait...</div>;
+};
+
+export default Verify;
